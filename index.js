@@ -1,33 +1,64 @@
 const express = require('express');
-const { default: makeWASocket, useMultiFileAuthState, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
-const P = require('pino');
+const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const pino = require('pino');
 const path = require('path');
-const app = express();
-app.use(require('cors')());
-app.use(express.static('public'));
+const fs = require('fs');
 
-let count = 0;
+const app = express();
+app.use(express.static('public'));
+app.use(express.json());
+
 app.get('/pair', async (req, res) => {
-  const number = req.query.number?.replace(/[^0-9]/g,'');
-  if(!number) return res.json({error:"Enter number bro"});
-  if(count >= 50) return res.json({error:"SERVER 02 Full! Buy SERVER 03 VIP - WhatsApp 0750765838"});
-  try{
-    const { state, saveCreds } = await useMultiFileAuthState(`./tmp/${number}`);
-    const sock = makeWASocket({
-      logger: P({level:'silent'}),
-      auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, P({level:'silent'})) },
-      browser: ['COOLGUY-BOSS','Chrome','1.0.0']
-    });
-    sock.ev.on('creds.update', saveCreds);
-    if(!sock.authState.creds.registered){
-      await new Promise(r=>setTimeout(r,3000));
-      let code = await sock.requestPairingCode(number);
-      code = code.match(/.{1,4}/g).join('-');
-      count++;
-      res.json({code, server:"SERVER 02", online:`${count}/50`});
-      setTimeout(()=>count--, 60000);
+    let num = req.query.number;
+    if (!num) return res.json({ error: 'Enter number' });
+    
+    num = num.replace(/[^0-9]/g, '');
+    if (!num.startsWith('256')) {
+        // keep as is if not UG, but try
     }
-  }catch(e){ res.json({error:e.message}); }
+
+    try {
+        const dir = './auth_' + num;
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+        
+        const { state, saveCreds } = await useMultiFileAuthState(dir);
+        const { version } = await fetchLatestBaileysVersion();
+        
+        const sock = makeWASocket({
+            version,
+            logger: pino({ level: 'silent' }),
+            auth: state,
+            printQRInTerminal: false,
+            browser: ['COOLGUY-HOST', 'Chrome', '1.0']
+        });
+
+        sock.ev.on('creds.update', saveCreds);
+
+        // wait 3 sec then request code
+        await new Promise(r => setTimeout(r, 2000));
+        
+        if (!sock.authState.creds.registered) {
+            let code = await sock.requestPairingCode(num);
+            code = code.match(/.{1,4}/g).join('-');
+            console.log('PAIR CODE for', num, ':', code);
+            res.json({ code: code });
+            
+            // auto clean after 60 sec
+            setTimeout(() => {
+                try { fs.rmSync(dir, { recursive: true, force: true }); } catch(e) {}
+            }, 60000);
+        } else {
+            res.json({ error: 'Already registered' });
+        }
+    } catch (e) {
+        console.log(e);
+        res.json({ error: 'Failed: ' + e.message + ' - Try again' });
+    }
 });
 
-app.listen(3000, ()=>console.log('BOSS LIVE'));
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log('COOLGUY HOSTING LIVE ON ' + PORT));
