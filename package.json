@@ -1,13 +1,14 @@
 {
   "name": "coolguy-hosting-panel",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "main": "index.js",
-  "scripts": { "start": "node index.js" },
+  "scripts": {
+    "start": "node index.js"
+  },
   "dependencies": {
     "express": "^4.18.2",
     "@whiskeysockets/baileys": "^6.7.8",
-    "pino": "^8.16.0",
-    "qrcode": "^1.5.3",
-    "cors": "^2.8.5"
+    "pino": "^8.16.2",
+    "qrcode-terminal": "^0.12.0"
   }
 }
